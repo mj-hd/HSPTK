@@ -1,0 +1,81 @@
+/*
+
+	モジュール名	m_rec_local
+	バージョン		1.02
+	作者			tyty
+	サイト			http://www31.tok2.com/home/tt/
+	説明
+		再帰モジュールにローカル変数もどきの機能を付加するモジュール
+		再帰内でローカル変数代わりとして使える機能を提供する
+
+		再帰内でレベルごとに何かしらの値を保持しておきたい場合は
+		このローカル変数付加マクロを併用すると良い
+
+		※このモジュールを使用する場合は m_rec.hsp も同時にインクルードしておく必要がある
+
+	対応バージョン
+		m_rec var 3.06C と併用する事を想定したモジュールです
+		その他のバージョンでは上手く動かないかもしれません
+*/
+
+
+#ifndef m_rec_local
+
+
+// 通常の再帰マクロを包んでローカル変数（の様な物）対応の再帰マクロを新たに定義
+// 名前の最後に _l サフィックスを付加した命令体系になっている
+#module m_rec_local
+
+
+// 変数未初期化報告対策
+_local@m_rec_local = 0
+
+
+// ローカル変数として使用する変数を指定する
+#define global rec_local(%1=_local@m_rec_local,%2=_local@m_rec_local,%3=_local@m_rec_local,%4=_local@m_rec_local)%trec_local%s1%s2%s3%s4
+
+// ローカル変数版の rec_begin
+#define global rec_begin_l(%1=_p1@m_rec,%2=_p2@m_rec,%3=_p3@m_rec,%4=_p4@m_rec)\
+dim %trec_local2%i _idx@m_rec_local :\
+dimtype %trec_local2%p _var1@m_rec_local, vartype(%trec_local%p0), len@m_rec :\
+dimtype %trec_local2%p _var2@m_rec_local, vartype(%trec_local%p1), len@m_rec :\
+dimtype %trec_local2%p _var3@m_rec_local, vartype(%trec_local%p2), len@m_rec :\
+dimtype %trec_local2%p _var4@m_rec_local, vartype(%trec_local%p3), len@m_rec :\
+rec_begin %1, %2, %3, %4 :\
+dup %trec_local%p0, %trec_local2%p _var1@m_rec_local(%trec_local2%p _idx@m_rec_local) :\
+dup %trec_local%p1, %trec_local2%p _var2@m_rec_local(%trec_local2%p _idx@m_rec_local) :\
+dup %trec_local%p2, %trec_local2%p _var3@m_rec_local(%trec_local2%p _idx@m_rec_local) :\
+dup %trec_local%p3, %trec_local2%p _var4@m_rec_local(%trec_local2%p _idx@m_rec_local) :\
+%trec_local%p0 = 0 :%trec_local%p1 = 0 :%trec_local%p2 = 0 :%trec_local%p3 = 0
+
+// ローカル変数版の rec_call
+#define global rec_call_l(%1=rec_prm1,%2=rec_prm2,%3=rec_prm3,%4=rec_prm4)\
+%trec_local2%p _idx@m_rec_local ++ :\
+rec_call %1, %2, %3, %4 :\
+%trec_local2%p _idx@m_rec_local -- :\
+dup %trec_local%p0, %trec_local2%p _var1@m_rec_local(%trec_local2%p _idx@m_rec_local) :\
+dup %trec_local%p1, %trec_local2%p _var2@m_rec_local(%trec_local2%p _idx@m_rec_local) :\
+dup %trec_local%p2, %trec_local2%p _var3@m_rec_local(%trec_local2%p _idx@m_rec_local) :\
+dup %trec_local%p3, %trec_local2%p _var4@m_rec_local(%trec_local2%p _idx@m_rec_local)
+
+// ローカル変数版の rec_end
+#define global rec_end_l(%1=rec_re1,%2=rec_re2,%3=rec_re3,%4=rec_re4)\
+rec_end %1, %2, %3, %4 :\
+dim %trec_local2%p _var1@m_rec_local :\
+dim %trec_local2%p _var2@m_rec_local :\
+dim %trec_local2%p _var3@m_rec_local :\
+dim %trec_local2%p _var4@m_rec_local :\
+dim %trec_local2%o _idx@m_rec_local :\
+dim %trec_local%o :\
+dim %trec_local%o :\
+dim %trec_local%o :\
+dim %trec_local%o
+
+// ローカル変数版の rec_return
+#define global rec_return_l(%1=rec_re1,%2=rec_re2,%3=rec_re3,%4=rec_re4)rec_return %1, %2, %3, %4
+
+
+#global
+
+
+#endif

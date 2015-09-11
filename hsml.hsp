@@ -1,0 +1,323 @@
+/*
+ * HSMLパーサ
+ * abdataのtnode型(tnx)が返る
+ * Public Domain
+ */
+
+#ifndef __HSML__
+#define __HSML__
+
+#include "abdata/stack.as"
+#include "abdata/tnode.as"
+#include "abdata/unor.as"
+
+#module hsml
+
+#const SJIS_MLT_START_1 129
+#const SJIS_MLT_END_1   159
+#const SJIS_MLT_START_2 224
+#const SJIS_MLT_END_2   252
+
+#enum STATE_NRM = 0
+#enum STATE_TAG
+#enum STATE_ATT
+#enum STATE_VAL
+#enum STATE_STR
+
+#deffunc parse str doc, var out
+/* HSMLをパースする
+ * parse p1, p2
+ * p1: パースする文字列, p2: 解析したツリーを格納する変数
+ */
+
+	data = doc
+
+	tnode_new out, "ROOT", list_make()
+	stack_new nodes
+
+	stack_push nodes, out
+
+	// variables
+	state = STATE_NRM
+	in_comment = 0
+	in_whitespace = 0
+	len   = strlen(data)
+	token = ""
+	att   = ""
+
+	row   = 1
+	col   = 0
+
+	char_a = 0
+	char   = ""
+
+	for i, 0, len, 1
+
+		char_a = peek(data, i)
+	
+		col++
+	
+		// detect multibyte
+		if ((SJIS_MLT_START_1 <= char_a && char_a <= SJIS_MLT_END_1) || (SJIS_MLT_START_2 <= char_a && char_a <= SJIS_MLT_END_2)) {
+	
+			if (len <= i-1) {
+				dialog strf("不正な文字 位置:(%d,%d)", col, row)
+				return 1
+			}
+	
+			// 2-byte character
+			poke char, 0, char_a
+			poke char, 1, peek(data, i+1)
+			poke char, 2, 0 // null char
+	
+			i++
+		} else {
+			// 1-byte character
+			poke char, 0, char_a
+			poke char, 1, 0
+		}
+	
+		if (char_a == 10) {
+			row++
+			col = 0
+		}
+	
+		// comment end -->
+		if (len > cnt-3) {
+			if (strmid(data, i, 3) == "-->") {
+				in_comment = 0
+				i += 3
+				_continue
+			}
+		}
+	
+		// comment start <!--
+		if (len > cnt-4) {
+			if (strmid(data, i, 4) == "<!--") {
+				in_comment = 1
+				i += 4
+				_continue
+			}
+		}
+	
+		// skip comment
+		if (in_comment) {
+			_continue
+		}
+	
+		switch(char_a)
+	
+			case '<'
+	
+				// tag start <
+				if (state == STATE_NRM) {
+					boundary
+					state++
+					_continue
+				}
+	
+				dialog strf("タグの開始位置が不正 位置:(%d,%d)", col, row)
+				return 1
+		
+			swbreak
+	
+			case '>'
+	
+				// tag end >
+				if (state == STATE_TAG || state == STATE_VAL || state == STATE_ATT) {
+					boundary
+					state = STATE_NRM
+					_continue
+				}
+		
+			swbreak
+	
+			case '='
+	
+				// value start =
+				if (state == STATE_ATT) {
+					boundary
+					state++
+					_continue
+				}
+	
+				if (state == STATE_TAG) {
+					dialog strf("属性名が無い 位置:(%d,%d)", col, row)
+					return 1
+				}
+	
+			swbreak
+	
+			case '"'
+			case '\''
+	
+				// string start "'
+				if (state == STATE_VAL) {
+					state++
+					_continue
+				}
+	
+				// string end "'
+				if (state == STATE_STR) {
+					boundary
+					state--
+					_continue
+				}
+	
+			swbreak
+	
+			case ' '
+			case '\t'
+			case 13
+			case 10
+	
+				if (in_whitespace) : _continue
+	
+				in_whitespace = 1
+	
+				if (state == STATE_NRM) {
+					_continue
+				}
+	
+				if (state == STATE_TAG) {
+					boundary
+					state++
+					_continue
+				}
+	
+				if (state != STATE_STR) {
+					boundary
+					state--
+					_continue
+				}
+			
+			swbreak
+	
+		swend
+	
+		in_whitespace = 0
+	
+		token += char
+	
+	next
+
+	if (strlen(token) > 0) {
+		boundary
+	}
+
+return 0
+	
+#deffunc local boundary
+	
+	if (strlen(token) == 0) : return
+	
+	switch(state)
+	
+		case STATE_NRM
+
+			tnode_new node, token, list_make()
+	
+			tnx_addChd stack_peek(nodes), node
+	
+		swbreak
+	
+		case STATE_TAG
+	
+			if (instr(token, 0, "/") == 0) {
+	
+				stack_new tmp
+	
+				poke token, 0, '#'
+	
+				repeat stack_size(nodes)
+	
+					node = stack_pop(nodes)
+	
+					if (tnode_get(node) == token) {
+	
+						Iterate(tmp, list) {
+							tnx_addChd node, tmp
+						}
+	
+						tnx_addChd stack_peek(nodes), node
+	
+						break
+					}
+	
+					stack_push tmp, node
+	
+				loop
+	
+				stack_delete tmp
+	
+				if (stack_size(nodes) == 0) {
+					dialog strf("対応するタグが無い タグ名:%s", strmid(token, 1, strlen(token)-1))
+				}
+				
+			} else {
+				// node -tree-> sysdef -unor-> { "tagName", [tagname] }
+				
+				unor_new sysdef
+	
+				unor_add sysdef, "tagName", token
+	
+				tnode_new node, "#" + token, list_make()
+				tnode_new sub_node, sysdef, list_make()
+	
+				tnx_addChd node, sub_node
+	
+				stack_push nodes, node
+			}
+	
+		swbreak
+	
+		case STATE_ATT
+	
+			node = stack_peek(nodes)
+	
+			repeat tnxSize(node)
+	
+				child = tnxChd(node, cnt)
+	
+				if (tnode_vartype(child) == 4) {
+					unor_set tnode_get(child), "$" + token, "(null)"
+	
+					att = token
+	
+					break
+				}
+	
+			loop
+	
+		swbreak
+	
+		case STATE_VAL
+		case STATE_STR
+	
+			node = stack_peek(nodes)
+	
+			repeat tnxSize(node)
+	
+				child = tnxChd(node, cnt)
+	
+				if (tnode_vartype(child) == 4) {
+					unor_set tnode_get(child), "$" + att, "" + token
+	
+					att = ""
+	
+					break
+				}
+	
+			loop
+	
+		swbreak
+	
+	swend
+	
+	token = ""
+	
+return
+
+#global
+
+#endif

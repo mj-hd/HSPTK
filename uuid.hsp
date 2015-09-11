@@ -1,0 +1,41 @@
+/*
+ * UUIDê∂ê¨ÉÇÉWÉÖÅ[Éã
+ * Public Domain
+ */
+
+#ifndef __UUID__
+#define __UUID__
+
+#uselib "Rpcrt4.dll"
+#func global UuidCreate "UuidCreate" sptr
+#func global UuidToString "UuidToStringA" sptr, sptr
+#func global RpcStringFree "RpcStringFreeA" sptr
+
+#module uuid
+
+// UUIDÇï‘Ç∑
+#defcfunc uuid_new
+
+	sdim uuid,   4+2+2+1*8
+	sdim string, 39
+	
+	result = 0
+
+	UuidCreate   varptr(uuid)
+	UuidToString varptr(uuid), varptr(result)
+	
+	dupptr orig, result, 39, 2
+	
+	repeat 39
+	
+		poke string, cnt, peek(orig, cnt)
+	
+	loop
+	
+	RpcStringFree varptr(result)
+	
+return string
+
+#global
+
+#endif

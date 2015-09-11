@@ -1,0 +1,139 @@
+/*
+
+	モジュール名	m_rec
+	バージョン		3.06C
+	作者			tyty
+	サイト			http://www31.tok2.com/home/tt/
+	説明
+		再帰処理っぽい構文を提供するモジュールです
+		ユーザー定義命令の形を取らず repeat & loop に近い感覚で
+		手軽に再帰的処理が出来るようになります
+
+		このモジュールの提供する再帰的処理は HSP の
+		ネストレベルに左右されないため膨大な深さの再帰的処理が可能になります
+
+		速度はそこそこ出ていると思っていますが
+		ユーザー定義命令を使用したものよりも２倍から１桁近く低速です
+
+*/
+
+
+#ifndef m_rec
+
+
+#module m_rec
+
+
+/* 未初期化変数報告対策 */
+_p1 = 0 :_p2 = 0 :_p3 = 0 :_p4 = 0
+
+
+// 初期化命令
+
+#define global rec_init(%1=1,%2=64) _rec_init %1, %2
+#deffunc _rec_init int _len, int _siz
+	len = _len
+	siz = _siz
+	return
+
+
+// 再帰マクロ内で使う専用の stack マクロと命令
+
+#deffunc local _rec_stack_new array arr, int type
+	on type = 2 goto *ON_DIMTYPE, *ON_SDIM
+*ON_DIMTYPE
+	dimtype arr, type, len + 1
+	return
+*ON_SDIM
+	sdim arr, siz, len + 1
+	return
+
+#define rec_stack_new(%1,%2,%3,%4,%5)\
+%1_arr0@m_rec = 0 :%1_arr1@m_rec = 0 :%1_arr2@m_rec = 0 :%1_arr3@m_rec = 0 :/* 未初期化変数報告対策 */\
+_rec_stack_new@m_rec %1_arr0@m_rec, vartype(%2) :_rec_stack_new@m_rec %1_arr1@m_rec, vartype(%3) :\
+_rec_stack_new@m_rec %1_arr2@m_rec, vartype(%4) :_rec_stack_new@m_rec %1_arr3@m_rec, vartype(%5) :\
+dim %1_idx@m_rec :ldim %1_lba@m_rec, len@m_rec :\
+%1_arr0@m_rec = %2 :%1_arr1@m_rec = %3 :%1_arr2@m_rec = %4 :%1_arr3@m_rec = %5
+
+#define rec_stack_winding(%1,%2,%3,%4,%5,%6)\
+%1_lba@m_rec(%1_idx@m_rec)  = %2 :%1_idx@m_rec ++ :\
+%1_arr0@m_rec(%1_idx@m_rec) = %3 :%1_arr1@m_rec(%1_idx@m_rec) = %4 :\
+%1_arr2@m_rec(%1_idx@m_rec) = %5 :%1_arr3@m_rec(%1_idx@m_rec) = %6
+
+#define rec_stack_unwinding_and_goto(%1,%2,%3,%4,%5)\
+%1_idx@m_rec -- :rec_stack_peek@m_rec %1, %2, %3, %4, %5 :goto %1_lba@m_rec(%1_idx@m_rec)
+
+#define rec_stack_peek(%1,%2,%3,%4,%5)\
+%2 = %1_arr0@m_rec(%1_idx@m_rec) :%3 = %1_arr1@m_rec(%1_idx@m_rec) :\
+%4 = %1_arr2@m_rec(%1_idx@m_rec) :%5 = %1_arr3@m_rec(%1_idx@m_rec)
+
+// _REC_NOTRELEASE_ 定数を定義すると、rec_end 終了時に内部変数を開放しないようになる。若干の高速化。
+;#define _REC_NOTRELEASE_@	// 有効化でオフになる。ここで有効にするか、#include より前に置く。
+#ifndef _REC_NOTRELEASE_@
+#define rec_stack_del(%1)\
+dim %1_idx@m_rec :dim %1_lba@m_rec :\
+dim %1_arr0@m_rec :dim %1_arr1@m_rec :dim %1_arr2@m_rec :dim %1_arr3@m_rec
+#else
+#define rec_stack_del(%1) /* 使用しない */
+#endif
+
+
+// 再帰マクロ内で使う 戻り値設定マクロ
+
+// _REC_NOTUSESETSTAT_ 定数を定義すると、戻り値マクロを使用しないようになる。若干の高速化。
+;#define _REC_NOTUSESETSTAT_@	// 有効化でオフになる。ここで有効にするか、#include より前に置く。
+#ifndef _REC_NOTUSESETSTAT_@
+#define global set_sysvar_stat(%1) goto *%tlbl_setstat1%i :*%tlbl_setstat2%i :return %1 :*%tlbl_setstat1%o :gosub *%tlbl_setstat2%o
+#else
+#define global set_sysvar_stat(%1) /* 使用しない */
+#endif
+
+
+// 再帰マクロ
+
+#define global rec_prm1 %tprm%p0
+#define global rec_prm2 %tprm%p1
+#define global rec_prm3 %tprm%p2
+#define global rec_prm4 %tprm%p3
+#define global rec_re1 re1@m_rec
+#define global rec_re2 re2@m_rec
+#define global rec_re3 re3@m_rec
+#define global rec_re4 re4@m_rec
+#define global rec_brcode code@m_rec
+
+#define global rec_begin(%1=_p1@m_rec,%2=_p2@m_rec,%3=_p3@m_rec,%4=_p4@m_rec)\
+%tprm%s4%s3%s2%s1 %trec_lbl_rtn%i0 %trec_lbl_end%i0 \
+rec_stack_new@m_rec %trec_var%i, %tprm%p0, %p1, %p2, %p3 :\
+rec_call %tprm%p0, %p1, %p2, %p3 :\
+rec_break :\
+*%trec_lbl_begin%i :\
+rec_stack_peek@m_rec %trec_var%p, %tprm%p0, %p1, %p2, %p3
+
+#define global rec_call(%1=rec_prm1,%2=rec_prm2,%3=rec_prm3,%4=rec_prm4)\
+rec_stack_winding@m_rec %trec_var%p, *%trec_lbl_back%i, %1, %2, %3, %4 :\
+goto *%trec_lbl_begin%p :\
+*%trec_lbl_back%o
+
+#define global rec_return(%1=rec_re1,%2=rec_re2,%3=rec_re3,%4=rec_re4)\
+rec_re1 = %1 :rec_re2 = %2 :rec_re3 = %3 :rec_re4 = %4 :goto *%trec_lbl_rtn%p
+
+#define global rec_break(%1=0) rec_brcode = %1 :goto *%trec_lbl_end%p
+#define global rec_level (%trec_var%p _idx@m_rec)
+
+#define global rec_end(%1=rec_re1,%2=rec_re2,%3=rec_re3,%4=rec_re4)\
+rec_return %1, %2, %3, %4 :\
+*%trec_lbl_rtn%p :\
+set_sysvar_stat rec_re1 :\
+rec_stack_unwinding_and_goto@m_rec %trec_var%p, %tprm%p0, %p1, %p2, %p3 :\
+*%trec_lbl_end%p :\
+rec_stack_del@m_rec %trec_var%p :\
+rec_release_mcrtag
+
+#define global rec_release_mcrtag %trec_var%o0 %tprm%o0%o0%o0%o0 %trec_lbl_begin%o0 %trec_lbl_end%o0 %trec_lbl_rtn%o0
+
+
+#global
+rec_init
+
+
+#endif

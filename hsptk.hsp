@@ -1,0 +1,469 @@
+/*
+ * HSPTK
+ * Public Domain
+ */
+#ifndef __HSPTK__
+#define __HSPTK__
+
+#include "hsml.hsp"
+#include "abdata/tnode.as"
+#include "abdata/list.as"
+#include "abdata/unor.as"
+#include "abdata/alg_iter.as"
+#include "m_rec.hsp"
+#include "m_rec_local.hsp"
+#include "user32.as"
+#include "uuid.hsp"
+#include "obj.as"
+
+#define WM_SIZE          $0005
+#define WM_LBUTTONDOWN   $0201
+#define WM_LBUTTONDBLCLK $0203
+#define WM_RBUTTONDOWN   $0204
+#define WM_RBUTTONDBLCLK $0206
+#define WM_MBUTTONDOWN   $0207
+#define WM_MBUTTONDBLCLK $0209
+
+#module window id, dom, events, objs, dispatcher, is_initialized
+
+#const BUF_ID 64
+
+#define global window_new(%1,%2,%3) %twindow_new \
+	oncmd gosub *%i,WM_SIZE :\
+	oncmd gosub *%i,WM_LBUTTONDOWN :\
+	if 0 : *%o {\
+		_mod@window=%1 :\
+		gosub *_on_click@window :\
+	return } :\
+	if 0 : *%o {\
+		_mod@window=%1 :\
+		gosub *_on_resize@window :\
+	return } :\
+	if 0 : *%i {\
+		_mod@window=%1 :\
+		gosub *_on_button_click@window :\
+	return } :\
+	_handler@window=*%o :\
+	newmod %1,window,%2 :\
+	init %1,%3,_handler@window
+	
+#define global ctype register_handler(%1,%2,%3) %twindow_register \
+	_handler@window = *%i :\
+	_register_handler %1,%2,%3,_handler@window :\
+	if 0 : *%o
+
+#modinit int _id
+
+	id = _id
+	unor_new events
+	unor_new objs
+	
+	tmp = ginfo_sel
+	
+	is_initialized = 0
+	
+	buffer BUF_ID
+	
+	gsel tmp
+
+return
+
+#modfunc init str _hspml, var _dispatcher
+		
+	dispatcher = _dispatcher
+	
+	parse _hspml, dom
+	if (stat) {
+		return 1
+	}
+	
+	layout thismod
+	if (stat) {
+		return 1
+	}
+	
+return 0
+
+#modfunc layout
+
+	node = dom
+	
+	rec_local tags
+
+	rec_begin_l node
+	
+		list_new tags
+	
+		repeat tnxSize(node)
+	
+			chd = tnxChd(node, cnt)
+		
+			// sysdef
+			if (tnode_vartype(chd) == 4) {
+	
+				sysdef = tnode_get(chd)
+			
+			} else {
+	
+				value = tnode_get(chd)
+		
+				// tag
+				if (instr(value, 0, "#") == 0) {
+		
+					list_add tags, chd
+	
+				// value
+				} else {
+				}
+			}
+	
+		loop
+	
+		// skip root
+		if (tnode_get(node) == "ROOT") : goto *_apply_dom_recur
+	
+		// tag name
+		if (unor_tryget(sysdef, "tagName", tag) == 0) {
+			dialog strf("システム定義の要素が不正(パースエラー) タグ名:%s", tnode_get(node))
+			return 1
+		}
+	
+		// event
+		if (unor_tryget(sysdef, "$name", name) == 0) {
+			name = "(null)"
+		}
+	
+		// position
+		if (unor_tryget(sysdef, "$x", x) == 0) {
+			x = ""
+		}
+		x = translate_x(x)
+		if (unor_tryget(sysdef, "$y", y) == 0) {
+			y = ""
+		}
+		y = translate_y(y)
+	
+		if (x == -1) {
+			if (y == -1) {
+			} else {
+				pos , y
+			}
+		} else {
+			if (y == -1) {
+				pos x, 
+			} else {
+				pos x, y
+			}
+		}
+	
+		// size
+		if (unor_tryget(sysdef, "$width", wid) == 0) {
+			wid = ""
+		}
+		wid = translate_width(wid)
+		if (unor_tryget(sysdef, "$height", hei) == 0) {
+			hei = ""
+		}
+		hei = translate_height(hei)
+	
+		if (wid == -1) {
+			if (hei == -1) {
+			} else {
+				objsize , hei
+			}
+		} else {
+			if (hei == -1) {
+				objsize wid, 
+			} else {
+				objsize wid, hei
+			}
+		}
+	
+		// color
+		if (unor_tryget(sysdef, "$background-color", y) == 0) {
+			bg = "$ffffff"
+		}
+		set_color bg
+		bg_r = ginfo_r
+		bg_g = ginfo_g
+		bg_b = ginfo_b
+		
+		if (unor_tryget(sysdef, "$color", x) == 0) {
+			col = "$000000"
+		}
+		set_color col
+	
+		switch (tag)
+	
+			case "window"
+				if (is_initialized) : swbreak
+			
+				if (unor_tryget(sysdef, "$max-width", mwid) == 0) {
+					mwid = "640"
+				}
+				if (mwid == "full") {
+					mwid = ""+ginfo_dispx
+				}
+				mwid = int(mwid)
+				if (unor_tryget(sysdef, "$max-height", mhei) == 0) {
+					mhei = "480"
+				}
+				if (mhei == "full") {
+					mhei = ""+ginfo_dispy
+				}
+				mhei = int(mhei)
+				
+				if (wid == -1) {
+					wid = 640
+				}
+				if (hei == -1) {
+					hei = 480
+				}
+				if (unor_tryget(sysdef, "$title", tit) == 0) {
+					tit = "無題"
+				}
+	
+				screen id, mwid, mhei
+				width wid, hei
+				title tit
+	
+				color bg_r, bg_g, bg_b
+				boxf
+	
+				if (unor_tryget(sysdef, "$resizable", dum)) {
+					GetWindowLong hwnd, -16
+					SetWindowLong hwnd, -16, stat | $10000 | $40000
+				}
+	
+				is_initialized = 1
+			swbreak
+	
+			case "mes"
+
+				if (strlen(value) > 0) {
+					mes value
+				}
+	
+			swbreak
+	
+			case "button"
+	
+				if (strlen(value) > 0) {
+	
+					iter_new objs, unor
+					while(iter_next(objs, unor, it))
+						if (unor_get(objs, it) == name) {
+	
+							dim rect, 4
+							getobjsize rect, int(it)
+							
+							rect(2) = ginfo_cx:rect(3) = ginfo_cy
+	
+							if (wid != -1) : rect(0) = wid
+							if (hei != -1) : rect(1) = hei
+	
+							resizeobj int(it), rect
+	
+							swbreak
+						}
+					wend
+					iter_delete objs, unor
+					
+					if (name != "(null)") {
+						button gosub value, dispatcher
+	
+						unor_set objs, ""+stat, name
+					} else {
+						button gosub value, *_dummy
+	
+						uuid = uuid_new()
+	
+						unor_set sysdef, "$name", uuid
+	
+						unor_set objs, ""+stat, uuid
+					}
+				}
+	
+			swbreak
+	
+			case "picture"
+	
+				if (strlen(value) > 0) {
+	
+					gsel BUF_ID
+	
+					picload value, 0
+	
+					img_w = ginfo_winx
+					img_h = ginfo_winy
+	
+					gsel id
+	
+					if (wid == -1) {
+						wid = img_w
+					}
+					if (hei == -1) {
+						hei = img_h
+					}
+	
+					gzoom wid, hei, BUF_ID, 0, 0, img_w, img_h
+				}
+	
+			swbreak
+	
+		swend
+	
+*_apply_dom_recur
+	
+	repeat list_size(tags)
+		rec_call_l list_get(tags, cnt)
+	loop
+	
+	list_delete tags
+
+	rec_end_l
+
+return 0
+
+#defcfunc local translate_width str _width
+	if (strlen(_width) == 0) : return -1
+	// percent
+	tmp = _width
+	if (instr(tmp, 0, "%") == strlen(_width) -1) {
+		return (double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winx
+	}
+	if (_width == "full") : return ginfo_winx
+	
+return int(_width)
+
+#defcfunc local translate_height str _height
+	if (strlen(_height) == 0) : return -1
+	// percent
+	tmp = _height
+	if (instr(tmp, 0, "%") == strlen(_height) -1) {
+		return (double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winy
+	}
+	if (_height == "full") : return ginfo_winy
+	
+return int(_height)
+
+#defcfunc local translate_x str _x
+	if (strlen(_x) == 0) : return -1
+	// percent
+	tmp = _x
+	if (instr(tmp, 0, "%") == strlen(_x) -1) {
+		return (double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winx
+	}
+	
+return int(_x)
+
+#defcfunc local translate_y str _y
+	if (strlen(_y) == 0) : return -1
+	// percent
+	tmp = _y
+	if (instr(tmp, 0, "%") == strlen(_y) -1) {
+		return (double(strtrim(rmp, 2, '%')) / 100.0) * ginfo_winy
+	}
+	
+return int(_y)
+
+#deffunc local set_color str _col
+	tmp = int(_col)
+	color (tmp & $FF0000) >> (4*4), (tmp & $00FF00) >> (4*2), (tmp & $0000FF)
+return
+
+#modfunc _register_handler str _name, str _event, var _lab
+
+	if (unor_tryget(events, _name, obj) == 0) {
+		unor_new obj
+		unor_set events, _name, obj
+	}
+	
+	unor_set obj, _event, _lab
+
+return
+
+#modcfunc get_id
+return id
+
+#modcfunc get_dom
+return dom
+
+#modcfunc get_events
+return events
+
+#modcfunc get_objs
+return objs
+
+#modcfunc get_is_initialized
+return is_initialized
+
+*_dummy
+return
+
+*_on_resize	
+	if (get_is_initialized(_mod@window) == 0) : return
+	
+	layout _mod@window
+	
+return
+
+*_on_click
+	logmes "click"
+return
+
+*_on_button_click
+	objid = ""+stat
+	
+	tmpobjs = get_objs(_mod@window)
+	tmpevents = get_events(_mod@window)
+	
+	if (unor_tryget(tmpobjs, objid, name) == 0) {
+		return
+	}
+	
+	if (unor_tryget(tmpevents, name, tmpevent) == 0) {
+		return
+	}
+	
+	if (unor_tryget(tmpevent, "onclick", event) == 0) {
+		return
+	}
+	
+	gosub event
+	
+return
+
+#global
+
+#endif
+
+	helloml = "samples/helloworld.hsml"
+
+	exist helloml
+	if (strsize <= 0) {
+		dialog strf("%sが見つかりませんでした。", helloml)
+		return
+	}
+	
+	ml = ""
+	notesel ml
+	noteload helloml
+
+	window_new hellowindow, 0, ml
+	
+	register_handler(hellowindow, "btn1", "onclick") {
+	
+		dialog "btn1がクリックされました。"
+	
+		return
+	}
+	
+	register_handler(hellowindow, "btn2", "onclick") {
+	
+		dialog "btn2がクリックされました。"
+	
+		return
+	}
+
+stop
