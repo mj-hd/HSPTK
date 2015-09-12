@@ -1,3 +1,5 @@
+#packopt hide 1
+
 /*
  * HSPTK
  * Public Domain
@@ -6,10 +8,7 @@
 #define __HSPTK__
 
 #include "hsml.hsp"
-#include "abdata/tnode.as"
-#include "abdata/list.as"
-#include "abdata/unor.as"
-#include "abdata/alg_iter.as"
+#include "abdata/abdata/all.as"
 #include "m_rec.hsp"
 #include "m_rec_local.hsp"
 #include "user32.as"
@@ -276,11 +275,11 @@ return 0
 					} else {
 						button gosub value, *_dummy
 	
-						uuid = uuid_new()
+						name = uuid_new()
 	
-						unor_set sysdef, "$name", uuid
+						unor_set sysdef, "$name", name
 	
-						unor_set objs, ""+stat, uuid
+						unor_set objs, ""+stat, name
 					}
 				}
 	
@@ -324,6 +323,10 @@ return 0
 	rec_end_l
 
 return 0
+
+#deffunc local translate_rect var _sysdef, array out
+
+return
 
 #defcfunc local translate_width str _width
 	if (strlen(_width) == 0) : return -1
@@ -398,6 +401,41 @@ return objs
 #modcfunc get_is_initialized
 return is_initialized
 
+#modcfunc get_element_by_name str _name
+	
+	node = dom
+	
+	rec_local tags
+	
+	rec_begin_l node
+	
+		list_new tags
+	
+		repeat tnxSize(node)
+	
+			chd_id = tnxChd(node, cnt)
+			newmod chd, element, chd_id
+	
+			if (get_name(chd) == _name) {
+				return chd
+			}
+	
+			delmod chd
+	
+		loop
+	
+		repeat list_size(tags)
+			rec_call_l list_get(tags, cnt)
+		loop
+		
+	rec_end_l
+	
+return
+
+#modcfunc get_elements_by_tag str _tag
+
+return
+
 *_dummy
 return
 
@@ -409,7 +447,7 @@ return
 return
 
 *_on_click
-	logmes "click"
+	
 return
 
 *_on_button_click
@@ -432,6 +470,44 @@ return
 	
 	gosub event
 	
+return
+
+#global
+
+#module element node, sysdef
+
+#modinit int _node
+	node   = _node
+	sysdef = get_sysdef(thismod) 
+return
+
+#modcfunc get_tag
+return unor_get(sysdef, "tagName")
+
+#modcfunc get_name
+	if (unor_tryget(sysdef, "$name", name) == 0) {
+		name = uuid_new()
+		unor_set sysdef, "$name", name
+	}
+return name
+
+#modcfunc get_sysdef
+	repeat tnxSize(node)
+		chd = tnxChd(node, cnt)
+		if (tnode_vartype(chd) == 4) {
+			return chd
+		}
+	loop
+return -1
+
+#modcfunc get_attribute str _att
+	if (unor_tryget(sysdef, "$"+_att, val) == 0) {
+		return "(null)"
+	}
+return val
+
+#modcfunc set_attribute str _att, str _val
+	unor_set sysdef, "$"+_att, _val
 return
 
 #global

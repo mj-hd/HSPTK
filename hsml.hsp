@@ -7,9 +7,7 @@
 #ifndef __HSML__
 #define __HSML__
 
-#include "abdata/stack.as"
-#include "abdata/tnode.as"
-#include "abdata/unor.as"
+#include "abdata/abdata/all.as"
 
 #module hsml
 
@@ -24,7 +22,7 @@
 #enum STATE_VAL
 #enum STATE_STR
 
-#deffunc parse str doc, var out
+#deffunc parse str doc, var dom
 /* HSMLをパースする
  * parse p1, p2
  * p1: パースする文字列, p2: 解析したツリーを格納する変数
@@ -32,10 +30,10 @@
 
 	data = doc
 
-	tnode_new out, "ROOT", list_make()
+	tnode_new dom, "ROOT", list_make()
 	stack_new nodes
 
-	stack_push nodes, out
+	stack_push nodes, dom
 
 	// variables
 	state = STATE_NRM

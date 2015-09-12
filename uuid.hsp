@@ -16,13 +16,13 @@
 // UUID‚ð•Ô‚·
 #defcfunc uuid_new
 
-	sdim uuid,   4+2+2+1*8
+	sdim guid,   4+2+2+1*8
 	sdim string, 39
 	
 	result = 0
 
-	UuidCreate   varptr(uuid)
-	UuidToString varptr(uuid), varptr(result)
+	UuidCreate   varptr(guid)
+	UuidToString varptr(guid), varptr(result)
 	
 	dupptr orig, result, 39, 2
 	
