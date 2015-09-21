@@ -1,4 +1,5 @@
 #packopt hide 1
+#cmpopt ppout 1
 
 /*
  * HSPTK
@@ -8,7 +9,10 @@
 #define __HSPTK__
 
 #include "hsml.hsp"
-#include "abdata/abdata/all.as"
+#include "abdata/tnode.as"
+#include "abdata/list.as"
+#include "abdata/unor.as"
+#include "abdata/alg_iter.as"
 #include "m_rec.hsp"
 #include "m_rec_local.hsp"
 #include "user32.as"
@@ -22,6 +26,64 @@
 #define WM_RBUTTONDBLCLK $0206
 #define WM_MBUTTONDOWN   $0207
 #define WM_MBUTTONDBLCLK $0209
+
+
+#module element node, sysdef
+
+#modinit int _node
+	node   = _node
+	sysdef = get_sysdef(thismod) 
+	if (sysdef == -1) {
+		tnode_dbglog _node
+		dialog "elementの初期化に失敗。sysdefが未定義("+_node+")"
+	}
+return
+
+#modcfunc get_tag
+return unor_get(sysdef, "tagName")
+
+#modcfunc get_name
+	if (unor_tryget(sysdef, "$name", name) == 0) {
+		name = uuid_new()
+		unor_set sysdef, "$name", name
+	}
+return name
+
+#modcfunc get_sysdef
+	res = -1
+	repeat tnxSize(node)
+		chd = tnxChd(node, cnt)
+		if (tnode_vartype(chd) == 4) {
+			res = tnode_get(chd)
+			break
+		}
+	loop
+return res
+
+#modcfunc get_value
+	res = "(null)"
+	repeat tnxSize(node)
+		chd = tnxChd(node, cnt)
+		if (tnode_vartype(chd) == 4) :continue
+		chd_name = tnode_get(chd)
+		if (instr(chd_name, 0, "#") == 0) :continue
+	
+		res = chd_name
+		break
+	loop
+return res
+
+#modcfunc get_attribute str _att
+	if (unor_tryget(sysdef, "$"+_att, val) == 0) {
+		return "(null)"
+	}
+return val
+
+#modcfunc set_attribute str _att, str _val
+	unor_set sysdef, "$"+_att, _val
+return
+
+#global
 
 #module window id, dom, events, objs, dispatcher, is_initialized
 
@@ -401,7 +463,7 @@ return objs
 #modcfunc get_is_initialized
 return is_initialized
 
-#modcfunc get_element_by_name str _name
+#modfunc get_element_by_name str _name, var out
 	
 	node = dom
 	
@@ -413,20 +475,30 @@ return is_initialized
 	
 		repeat tnxSize(node)
 	
-			chd_id = tnxChd(node, cnt)
-			newmod chd, element, chd_id
+			chd = tnxChd(node, cnt)
 	
-			if (get_name(chd) == _name) {
-				return chd
+			if (tnode_vartype(chd) == 4) :continue
+	
+			chd_name = tnode_get(chd)
+			if (instr(chd_name, 0, "#") != 0) :continue
+			
+			newmod out, element, chd
+	
+			if (get_name(out) == _name) {
+				break
 			}
 	
-			delmod chd
+			list_add tags, chd
+	
+			delmod out
 	
 		loop
 	
 		repeat list_size(tags)
 			rec_call_l list_get(tags, cnt)
 		loop
+	
+		list_delete tags
 		
 	rec_end_l
 	
@@ -474,44 +546,6 @@ return
 
 #global
 
-#module element node, sysdef
-
-#modinit int _node
-	node   = _node
-	sysdef = get_sysdef(thismod) 
-return
-
-#modcfunc get_tag
-return unor_get(sysdef, "tagName")
-
-#modcfunc get_name
-	if (unor_tryget(sysdef, "$name", name) == 0) {
-		name = uuid_new()
-		unor_set sysdef, "$name", name
-	}
-return name
-
-#modcfunc get_sysdef
-	repeat tnxSize(node)
-		chd = tnxChd(node, cnt)
-		if (tnode_vartype(chd) == 4) {
-			return chd
-		}
-	loop
-return -1
-
-#modcfunc get_attribute str _att
-	if (unor_tryget(sysdef, "$"+_att, val) == 0) {
-		return "(null)"
-	}
-return val
-
-#modcfunc set_attribute str _att, str _val
-	unor_set sysdef, "$"+_att, _val
-return
-
-#global
-
 #endif
 
 	helloml = "samples/helloworld.hsml"
@@ -535,11 +569,8 @@ return
 		return
 	}
 	
-	register_handler(hellowindow, "btn2", "onclick") {
+	get_element_by_name hellowindow, "btn1", btn1
 	
-		dialog "btn2がクリックされました。"
-	
-		return
-	}
+	mes get_value(btn1)
 
 stop

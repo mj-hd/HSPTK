@@ -2,4 +2,5 @@
 	title="Hello, World!!"
 	width=400 height=300>
 	<mes>Hello, World!!</mes>
+	<button name="btn1">TEST</button>
 </window>
