@@ -123,7 +123,7 @@ return
 /*
  * ウィンドウを表すモジュール
  */
-#module window id, dom, events, objs, dispatcher, is_initialized
+#module window id, dom, events, objs, dispatcher, is_initialized, is_layouting
 
 #const BUF_ID 64 // 画像処理に使用するバッファID
 
@@ -198,6 +198,8 @@ return 0
  * 各要素を再配置する
  */
 #modfunc layout
+
+	is_layouting = 1
 
 	node = dom
 	
@@ -368,11 +370,12 @@ return 0
 					while(iter_next(objs, unor, it))
 						if (unor_get(objs, it) == name) {
 	
-							dim rect, 4
+							dim rect, 6
+
 							getobjsize rect, int(it)
-							
+
 							rect(2) = ginfo_cx:rect(3) = ginfo_cy
-	
+
 							if (wid != -1) : rect(0) = wid
 							if (hei != -1) : rect(1) = hei
 	
@@ -436,6 +439,8 @@ return 0
 	list_delete tags
 
 	rec_end_l
+	
+	is_layouting = 0
 
 return 0
 
@@ -448,7 +453,7 @@ return
 	// percent
 	tmp = _width
 	if (instr(tmp, 0, "%") == strlen(_width) -1) {
-		return (double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winx
+		return int((double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winx)
 	}
 	if (_width == "full") : return ginfo_winx
 	
@@ -459,7 +464,7 @@ return int(_width)
 	// percent
 	tmp = _height
 	if (instr(tmp, 0, "%") == strlen(_height) -1) {
-		return (double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winy
+		return int((double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winy)
 	}
 	if (_height == "full") : return ginfo_winy
 	
@@ -470,7 +475,7 @@ return int(_height)
 	// percent
 	tmp = _x
 	if (instr(tmp, 0, "%") == strlen(_x) -1) {
-		return (double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winx
+		return int((double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winx)
 	}
 	
 return int(_x)
@@ -480,7 +485,7 @@ return int(_x)
 	// percent
 	tmp = _y
 	if (instr(tmp, 0, "%") == strlen(_y) -1) {
-		return (double(strtrim(rmp, 2, '%')) / 100.0) * ginfo_winy
+		return int((double(strtrim(rmp, 2, '%')) / 100.0) * ginfo_winy)
 	}
 	
 return int(_y)
@@ -515,6 +520,9 @@ return objs
 
 #modcfunc get_is_initialized
 return is_initialized
+
+#modcfunc get_is_layouting
+return is_layouting
 
 /*
  * name属性から要素を取得
@@ -575,6 +583,7 @@ return
 // リサイズ時
 *_on_resize	
 	if (get_is_initialized(_mod@window) == 0) : return
+	if (get_is_layouting(_mod@window)   == 1) : return
 	
 	layout _mod@window
 	
@@ -612,7 +621,7 @@ return
 
 #endif
 
-	helloml = "samples/helloworld.hsml"
+	helloml = "samples/dock.hsml"
 
 	exist helloml
 	if (strsize <= 0) {
@@ -625,16 +634,5 @@ return
 	noteload helloml
 
 	window_new hellowindow, 0, ml
-	
-	register_handler(hellowindow, "btn1", "onclick") {
-	
-		dialog "btn1がクリックされました。"
-	
-		return
-	}
-	
-	get_element_by_name hellowindow, "btn1", btn1
-	
-	dialog "btn1の値は"+get_value(btn1)
 
 stop
