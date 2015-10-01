@@ -22,7 +22,8 @@
 #enum STATE_VAL
 #enum STATE_STR
 
-#deffunc parse str doc, var dom
+#deffunc parse str doc, var dom, \
+	local it
 /* HSMLをパースする
  * parse p1, p2
  * p1: パースする文字列, p2: 解析したツリーを格納する変数
@@ -31,6 +32,7 @@
 	data = doc
 
 	tnode_new dom, "ROOT", list_make()
+	
 	stack_new nodes
 
 	stack_push nodes, dom
@@ -205,7 +207,8 @@
 
 return 0
 	
-#deffunc local boundary
+#deffunc local boundary \
+	local it
 	
 	if (strlen(token) == 0) : return
 	
@@ -315,6 +318,40 @@ return 0
 	token = ""
 	
 return
+
+#define global hsml_dbglog(%1,%2=0) _hsml_dbglog %1,%2
+
+#deffunc _hsml_dbglog int dom, int nest, \
+	local it1, local it2, local stmp, local chd
+	
+	stmp = ""
+	
+	if (nest > 0) {
+		repeat nest - 1
+			stmp   += "|   "
+		loop
+		stmp   += "|--"
+	}
+	
+	tmp = tnode_get(dom)
+	
+	if (tnode_vartype(dom) == 4) {
+		IterateBegin tmp, unor, it1
+			logmes stmp + strf("--%s:%s", it1, unor_get(tmp, it1))
+		IterateEnd
+		return
+	}
+	
+	logmes stmp + tmp
+	
+	chd = tnode_getChd(dom)
+	if ( chd != listNull ) {
+		IterateBegin chd, list, it2
+			hsml_dbglog it2, nest + 1
+		IterateEnd
+	}
+	
+	return
 
 #global
 

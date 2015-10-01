@@ -9,10 +9,7 @@
 #define __HSPTK__
 
 #include "hsml.hsp"
-#include "abdata/tnode.as"
-#include "abdata/list.as"
-#include "abdata/unor.as"
-#include "abdata/alg_iter.as"
+#include "abdata/abdata/all.as"
 #include "m_rec.hsp"
 #include "m_rec_local.hsp"
 #include "user32.as"
@@ -37,14 +34,14 @@
 #defcfunc local is_sysdef int node
 return (tnode_vartype(node) == 4)
 
-#defcfunc local is_element int node
+#defcfunc local is_element int node, \
+	local tmp
 	if (is_sysdef@hsptk(node)) :return 0
 	tmp = tnode_get(node)
 return (instr(tmp, 0, "#") == 0)
 
 #defcfunc local is_value int node
 return ((is_sysdef@hsptk(node) == 0) && (is_element@hsptk(node) == 0))
-
 #global
 
 /*
@@ -54,10 +51,12 @@ return ((is_sysdef@hsptk(node) == 0) && (is_element@hsptk(node) == 0))
 
 #modinit int _node
 	node   = _node
-	sysdef = get_sysdef(thismod) 
+	sysdef = get_sysdef(thismod)
 	
 	if (sysdef == -1) {
+		#ifdef _debug
 		tnode_dbglog _node
+		#endif
 		dialog "elementの初期化に失敗。sysdefが未定義("+_node+")"
 	}
 return
@@ -71,7 +70,8 @@ return unor_get(sysdef, "tagName")
 /*
  * name属性を取得する
  */
-#modcfunc get_name
+#modcfunc get_name \
+	local name
 	if (unor_tryget(sysdef, "$name", name) == 0) {
 		// name属性が設定されていなければ、ランダムなUUIDを生成し設定
 		name = uuid_new()
@@ -83,7 +83,8 @@ return name
  * sysdef情報を取得する。エラー時は-1が返る
  * (sysdefはtnx型)
  */
-#modcfunc get_sysdef
+#modcfunc get_sysdef \
+	local res, local chd
 	res = -1
 	repeat tnxSize(node)
 		chd = tnxChd(node, cnt)
@@ -97,7 +98,8 @@ return res
 /*
  * 値を取得する。エラー時は"(null)"が返る
  */
-#modcfunc get_value
+#modcfunc get_value \
+	local res, local chd
 	res = "(null)"
 	repeat tnxSize(node)
 		chd = tnxChd(node, cnt)
@@ -108,9 +110,19 @@ return res
 	loop
 return res
 
-#modcfunc get_attribute str _att
+#modcfunc exists_attribute str _att, \
+	local dum
+	
+	if (unor_tryget(sysdef, "$"+_att, dum) == 0) {
+		return 0
+	}
+return 1
+
+#define global ctype get_attribute(%1,%2,%3="(null)") _get_attribute(%1,%2,%3)
+#modcfunc _get_attribute str _att, str _def, \
+	local val
 	if (unor_tryget(sysdef, "$"+_att, val) == 0) {
-		return "(null)"
+		return _def
 	}
 return val
 
@@ -118,14 +130,112 @@ return val
 	unor_set sysdef, "$"+_att, _val
 return
 
+#modcfunc get_x \
+	local x
+	
+	if (unor_tryget(sysdef, "x", x) == 0) {
+		return -1
+	}
+return int(x)
+
+#modcfunc get_y \
+	local y
+	
+	if (unor_tryget(sysdef, "y", y) == 0) {
+		return -1
+	}
+return int(y)
+
+#modcfunc get_size str _size_str, \
+	local size
+	
+	if (_size_str != "width" && _size_str != "height") : return -1
+	
+	if (unor_tryget(sysdef, _size_str, size) == 0) {
+		return -1
+	}
+return int(size)
+
+#modfunc set_x int x
+	unor_set sysdef, "x", ""+x
+return
+
+#modfunc set_y int y
+	unor_set sysdef, "y", ""+y
+return
+
+#modfunc set_size int size, str size_str
+	if (_size_str != "width" && _size_str != "height") : return -1
+	
+	unor_set sysdef, size_str, ""+size
+return 0
+
+#define global ctype get_width(%1) get_size(%1,"width")
+#define global ctype get_height(%1) get_size(%1,"height")
+#define global set_width(%1,%2,%3) set_size %1,%2,"width"
+#define global set_height(%1,%2,%3) set_size %1,%2,"height"
+
+// TODO: $topを返すべき？
+#define global ctype get_left(%1) get_x(%1)
+#define global ctype get_top(%1) get_y(%1)
+
+#modcfunc get_bottom \
+	local top, local hei
+	
+	top = get_y(thismod)
+	if (top == -1) : return -1
+	hei = get_height(thismod)
+	if (hei == -1) : return -1
+return top + hei
+
+#modcfunc get_right \
+	local left, local wid
+	
+	left = get_x(thismod)
+	if (left == -1) : return -1
+	wid = get_width(thismod)
+	if (wid == -1) : return -1
+return left + wid
+
+#modcfunc get_children_list \
+	local result, local chd
+	
+	list_new result
+	
+	repeat tnxSize(node)
+	
+		chd = tnxChd(node, cnt)
+	
+		if (is_element@hsptk(chd) == 1) {
+			list_add result, chd
+		}
+	loop
+	
+return result
+
+#modcfunc get_node
+return node
+
 #global
 
 /*
  * ウィンドウを表すモジュール
  */
-#module window id, dom, events, objs, dispatcher, is_initialized, is_layouting
+#module window id, dom, defwin, events, objs, dispatcher, is_initialized, is_layouting
 
 #const BUF_ID 64 // 画像処理に使用するバッファID
+#define global elemlist_dbglog(%1) logmes "[%1]":_elemlist_dbglog %1
+
+#deffunc _elemlist_dbglog int li, \
+	local tmp
+
+	repeat list_size(li)
+		newmod tmp, element, list_get(li, cnt)
+		logmes ""+cnt+": "+get_name(tmp)
+		delmod tmp
+	loop
+return
+
 
 /*
  * HSMLファイルからウィンドウを作成する
@@ -161,7 +271,7 @@ return
 	_register_handler %1,%2,%3,_handler@window :\
 	if 0 : *%o
 
-#modinit int _id
+#modinit int _id, local tmp
 
 	id = _id
 	unor_new events
@@ -177,19 +287,58 @@ return
 
 return
 
-#modfunc local init str _hspml, var _dispatcher
+#modterm
+	delmod defwin
+return
+
+#modfunc local init str _hspml, var _dispatcher, \
+	local root, local mwid, local mhei, local wid, \
+	local hei, local tit, \
+	local bg, local col
 	
 	dispatcher = _dispatcher
 	
-	parse _hspml, dom
+	parse _hspml, root
 	if (stat) {
-		return 1
+		return 1 // エラーの値を統一すべき
 	}
 	
+	// screenの初期化処理
+	dom = tnxChd(root, 0)
+	newmod defwin, element, dom
+	
+	mwid = get_attribute(defwin, "max-width", "640")
+	if (mwid == "full") : mwid = ""+ginfo_winx
+	mwid = int(mwid)
+	mhei = get_attribute(defwin, "max-height", "480")
+	if (mhei == "full") : mhei = ""+ginfo_winy
+	mhei = int(mhei)
+	
+	wid = int(get_attribute(defwin, "width", "640"))
+	hei = int(get_attribute(defwin, "height", "480"))
+	
+	tit = get_attribute(defwin, "title", "無題")
+	
+	screen id, mwid, mhei
+	width wid, hei
+	title tit
+	
+	bg = get_attribute(defwin, "background-color", "$ffffff")
+	set_color bg
+	boxf
+	
+	if (exists_attribute(defwin, "resizable") == 1) {
+		GetWindowLong hwnd, -16
+		SetWindowLong hwnd, -16, stat | $10000 | $40000
+	}
+	
+	// 部品の配置
 	layout thismod
 	if (stat) {
 		return 1
 	}
+	
+	is_initialized = 1
 	
 return 0
 
@@ -197,63 +346,39 @@ return 0
 /*
  * 各要素を再配置する
  */
-#modfunc layout
+#modfunc layout \
+	local node,  local tags, local chd, \
+	local value, local tag,  local name, \
+	local x,  local y, local wid,  local hei, \
+	local bg, local rect, \
+	local img_w, local img_h, local elem
 
 	is_layouting = 1
 
+	calc thismod
+	if (stat == -1) : return -1
+
+	hsml_dbglog dom
+
 	node = dom
+	
+	redraw 0
 	
 	rec_local tags
 
 	rec_begin_l node
 	
-		list_new tags
+		newmod elem, element, node
 	
-		repeat tnxSize(node)
+		tags = get_children_list(elem)
 	
-			chd = tnxChd(node, cnt)
-		
-			if (is_sysdef@hsptk(chd)) {
-	
-				sysdef = tnode_get(chd)
-			
-			} else : if (is_element@hsptk(chd)) {
-		
-				list_add tags, chd
-				
-			} else {
-	
-				value = tnode_get(chd)
-				
-			}
-	
-		loop
-	
-		// TODO: elementモジュールを使うように修正
-	
-		// ROOTはスキップ
-		if (tnode_get(node) == "ROOT") : goto *_apply_dom_recur
-	
-		// タグ名
-		if (unor_tryget(sysdef, "tagName", tag) == 0) {
-			dialog strf("システム定義の要素が不正(パースエラー) タグ名:%s", tnode_get(node))
-			return 1
-		}
-	
-		// name属性
-		if (unor_tryget(sysdef, "$name", name) == 0) {
-			name = "(null)"
-		}
-	
-		// 位置
-		if (unor_tryget(sysdef, "$x", x) == 0) {
-			x = ""
-		}
-		x = translate_x(x)
-		if (unor_tryget(sysdef, "$y", y) == 0) {
-			y = ""
-		}
-		y = translate_y(y)
+		tag   = get_tag(elem)
+		name  = get_name(elem)
+		x     = get_x(elem)
+		y     = get_y(elem)
+		wid   = get_width(elem)
+		hei   = get_height(elem)
+		value = get_value(elem)
 	
 		// カレントポジションを設定
 		if (x == -1) {
@@ -268,16 +393,6 @@ return 0
 				pos x, y
 			}
 		}
-	
-		// サイズ
-		if (unor_tryget(sysdef, "$width", wid) == 0) {
-			wid = ""
-		}
-		wid = translate_width(wid)
-		if (unor_tryget(sysdef, "$height", hei) == 0) {
-			hei = ""
-		}
-		hei = translate_height(hei)
 	
 		// objsizeの設定
 		if (wid == -1) {
@@ -294,64 +409,17 @@ return 0
 		}
 	
 		// 色
-		if (unor_tryget(sysdef, "$background-color", y) == 0) {
-			bg = "$ffffff"
-		}
-		set_color bg
-		bg_r = ginfo_r
-		bg_g = ginfo_g
-		bg_b = ginfo_b
-		
-		if (unor_tryget(sysdef, "$color", x) == 0) {
-			col = "$000000"
-		}
+		bg = get_attribute(elem, "background-color", "$ffffff")
+	
+		col = get_attribute(elem, "color", "$000000")
 		set_color col
 	
 		// タグごとの処理
 		switch (tag)
 	
 			case "window"
-				if (is_initialized) : swbreak
-	
-				// 属性ごとの処理
-				if (unor_tryget(sysdef, "$max-width", mwid) == 0) {
-					mwid = "640"
-				}
-				if (mwid == "full") {
-					mwid = ""+ginfo_dispx
-				}
-				mwid = int(mwid)
-				if (unor_tryget(sysdef, "$max-height", mhei) == 0) {
-					mhei = "480"
-				}
-				if (mhei == "full") {
-					mhei = ""+ginfo_dispy
-				}
-				mhei = int(mhei)
-				
-				if (wid == -1) {
-					wid = 640
-				}
-				if (hei == -1) {
-					hei = 480
-				}
-				if (unor_tryget(sysdef, "$title", tit) == 0) {
-					tit = "無題"
-				}
-	
-				screen id, mwid, mhei
-				width wid, hei
-				title tit
-	
-				color bg_r, bg_g, bg_b
+				set_color bg
 				boxf
-	
-				if (unor_tryget(sysdef, "$resizable", dum)) {
-					GetWindowLong hwnd, -16
-					SetWindowLong hwnd, -16, stat | $10000 | $40000
-				}
-	
-				is_initialized = 1
 			swbreak
 	
 			case "mes"
@@ -386,19 +454,9 @@ return 0
 					wend
 					iter_delete objs, unor
 					
-					if (name != "(null)") {
-						button gosub value, dispatcher
+					button gosub value, dispatcher
 	
-						unor_set objs, ""+stat, name
-					} else {
-						button gosub value, *_dummy
-	
-						name = uuid_new()
-	
-						unor_set sysdef, "$name", name
-	
-						unor_set objs, ""+stat, name
-					}
+					unor_set objs, ""+stat, name
 				}
 	
 			swbreak
@@ -432,6 +490,8 @@ return 0
 	
 *_apply_dom_recur
 	
+	delmod elem
+	
 	repeat list_size(tags)
 		rec_call_l list_get(tags, cnt)
 	loop
@@ -440,62 +500,321 @@ return 0
 
 	rec_end_l
 	
+	redraw 1
+	
 	is_layouting = 0
 
 return 0
 
-#deffunc local translate_rect var _sysdef, array out
+#modfunc local calc \
+	local autos, local elem, \
+	local x, local y, local len
+
+	list_new autos
+
+	y = calc_pass_1(thismod, "height", autos, len)
+	if (y == -1) : return -1
+	
+	IterateBegin autos, list
+		newmod elem, element, it
+
+		set_height elem, (ginfo_winy - y) / len
+	
+		delmod elem
+	IterateEnd
+
+	calc_pass_2 thismod, "height"
+	
+	list_clear autos
+	
+	x = calc_pass_1(thismod, "width", autos, len)
+	if (x == -1) : return -1
+	
+	IterateBegin autos, list
+		newmod elem, element, it
+	
+		set_width elem, (ginfo_winx - x) / len
+	
+		delmod elem
+	IterateEnd
+	
+	calc_pass_2 thismod, "width"
+	
+	list_delete autos
 
 return
 
-#defcfunc local translate_width str _width
-	if (strlen(_width) == 0) : return -1
-	// percent
-	tmp = _width
-	if (instr(tmp, 0, "%") == strlen(_width) -1) {
-		return int((double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winx)
-	}
-	if (_width == "full") : return ginfo_winx
-	
-return int(_width)
+#modcfunc local calc_pass_1 str size_str, var out, var out_cnt, \
+	local dir, local p, local winname, \
+	local target, local r, local size, local elem, \
+	local dir_o, local tmp, local count, local fixed, \
+	local result
 
-#defcfunc local translate_height str _height
-	if (strlen(_height) == 0) : return -1
-	// percent
-	tmp = _height
-	if (instr(tmp, 0, "%") == strlen(_height) -1) {
-		return int((double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winy)
-	}
-	if (_height == "full") : return ginfo_winy
-	
-return int(_height)
+	out_cnt = 0
+	result = 0
 
-#defcfunc local translate_x str _x
-	if (strlen(_x) == 0) : return -1
-	// percent
-	tmp = _x
-	if (instr(tmp, 0, "%") == strlen(_x) -1) {
-		return int((double(strtrim(tmp, 2, '%')) / 100.0) * ginfo_winx)
+	dir = ""
+	dir_o = ""
+
+	switch (size_str)
+		case "height"
+			dir = "bottom"
+			dir_o = "top"
+		swbreak
+	
+		case "width"
+			dir = "right"
+			dir_o = "left"
+		swbreak
+
+		default
+			dialog "不正なサイズ文字列(widthかheightのどちらかだけ)"
+			return -1
+	swend
+
+	p = dom
+	
+	newmod elem, element, p
+	winname = get_name(elem)
+	delmod elem
+	
+	fixed = 0
+	count = 0
+
+	rec_local r
+	
+	rec_begin_l fixed, count
+
+		newmod target, element, p
+	
+		r = get_related_elems_list(thismod, target, dir)
+		elemlist_dbglog r
+
+		delmod target
+	
+		IterateBegin r, list
+
+			elemlist_dbglog r
+
+			newmod elem, element, it
+	
+			size = get_attribute(elem, size_str, "auto")
+
+			if (it == dom) {
+				if (count > out_cnt) {
+					out_cnt = count
+				}
+				if (fixed > result) {
+					result = fixed
+				}
+				rec_return_l
+			}
+	
+			p = it
+	
+			if (size == "auto" || size == "(null)") {
+	
+				list_add out, it
+
+				delmod elem
+
+				rec_call_l fixed, count+1
+				
+			} else {
+				size = get_percent_size(thismod, it, size_str)
+				set_size elem, size, size_str
+
+				delmod elem
+
+				rec_call_l fixed + size, count
+			}
+			
+		IterateEnd
+	
+		list_delete r
+	
+	rec_end_l
+
+
+return result
+
+#modfunc local calc_pass_2 str size_str, \
+	local y, local size, local elem, local target, local dir, \
+	local winname, local dir_o, local tmp
+
+	y = 0
+	
+	dir = ""
+	dir_o = ""
+
+	switch (size_str)
+		case "height"
+			dir = "bottom"
+			dir_o = "top"
+		swbreak
+	
+		case "width"
+			dir = "right"
+			dir_o = "left"
+		swbreak
+	
+		default
+			dialog "不正なサイズ文字列(widthかheightのどちらかだけ)"
+			return -1
+	swend
+
+
+	p = dom
+	
+	newmod elem, element, p
+	winname = get_name(elem)
+	delmod elem
+	
+	y = 0
+	
+	rec_local r
+	
+	rec_begin_l y
+
+		newmod target, element, p
+	
+		r = get_related_elems_list(thismod, target, dir)
+	
+		delmod target
+	
+		IterateBegin r, list
+
+			list_dbglog r
+
+			if (it == dom) : _continue
+	
+			newmod elem, element, it
+	
+	
+			if (size_str == "height") {
+				set_y elem, y
+			} else : if (size_str == "width") {
+				set_x elem, y
+			}
+	
+			size = get_size(elem, size_str)
+
+			p = it
+	
+			delmod elem
+	
+			rec_call_l y + size
+			
+		IterateEnd
+	
+		list_delete r
+	
+	rec_end_l
+
+return
+
+#modcfunc local get_percent_size int target, str size_str, \
+	local size, local elem
+	
+	newmod elem, element, target
+
+	size = get_attribute(elem, size_str)
+	
+	if (size == "(null)" || size == "auto") {
+		return -1
 	}
 	
-return int(_x)
-
-#defcfunc local translate_y str _y
-	if (strlen(_y) == 0) : return -1
-	// percent
-	tmp = _y
-	if (instr(tmp, 0, "%") == strlen(_y) -1) {
-		return int((double(strtrim(rmp, 2, '%')) / 100.0) * ginfo_winy)
+	if (instr(size, 1, "%") >= 0) {
+		// パーセント処理
+		return 100
 	}
 	
-return int(_y)
+	delmod elem
 
-#deffunc local set_color str _col
+return int(size)
+
+#modcfunc local get_related_elems_list var elem, str dir, \
+	local target, local result, local node, local tags, \
+	local chd, local out, local dir_o, local tmp
+
+	// TODO: 
+	switch(dir)
+		case "right"
+			dir_o = "left"
+		swbreak
+		case "left"
+			dir_o = "right"
+		swbreak
+		case "top"
+			dir_o = "bottom"
+		swbreak
+		case "bottom"
+			dir_o = "top"
+		swbreak
+	swend
+
+	target = get_name(elem)
+
+	list_new result
+
+	if (exists_attribute(elem, dir_o + "-of")) {
+		get_element_by_name thismod, get_attribute(elem, dir_o + "-of"), tmp
+		list_add result, get_node(tmp)
+		delmod tmp
+	}
+
+	node = dom
+	
+	rec_local tags
+	
+	rec_begin_l node
+	
+		list_new tags
+	
+		repeat tnxSize(node)
+	
+			chd = tnxChd(node, cnt)
+
+			if (is_element@hsptk(chd) == 0) :continue
+			
+			newmod out, element, chd
+
+			if (get_attribute(out, strf("%s-of", dir), get_name(defwin)) == target) {
+				if (exists_attribute(out, dir_o) == 1) {
+					list_add result, chd
+				}
+			}
+	
+			list_add tags, chd
+	
+			delmod out
+	
+		loop
+	
+		repeat list_size(tags)
+			rec_call_l list_get(tags, cnt)
+		loop
+	
+		list_delete tags
+		
+	rec_end_l
+
+	if (list_size(result) == 0) {
+		list_add result, dom
+	}
+
+	
+return result
+
+#deffunc local set_color str _col, \
+	local tmp
+	
 	tmp = int(_col)
 	color (tmp & $FF0000) >> (4*4), (tmp & $00FF00) >> (4*2), (tmp & $0000FF)
 return
 
-#modfunc _register_handler str _name, str _event, var _lab
+#modfunc _register_handler str _name, str _event, var _lab, \
+	local obj
 
 	if (unor_tryget(events, _name, obj) == 0) {
 		unor_new obj
@@ -528,7 +847,8 @@ return is_layouting
  * name属性から要素を取得
  * get_element_by_name name属性名, 取得する変数
  */
-#modfunc get_element_by_name str _name, var out
+#modfunc get_element_by_name str _name, var out, \
+	local node, local tags, local chd
 	
 	node = dom
 	
@@ -542,10 +862,7 @@ return is_layouting
 	
 			chd = tnxChd(node, cnt)
 	
-			if (tnode_vartype(chd) == 4) :continue
-	
-			chd_name = tnode_get(chd)
-			if (instr(chd_name, 0, "#") != 0) :continue
+			if (is_element@hsptk(chd) == 0) :continue
 			
 			newmod out, element, chd
 	
@@ -581,7 +898,7 @@ return
 return
 
 // リサイズ時
-*_on_resize	
+*_on_resize
 	if (get_is_initialized(_mod@window) == 0) : return
 	if (get_is_layouting(_mod@window)   == 1) : return
 	
@@ -596,24 +913,24 @@ return
 
 // ボタンクリック時
 *_on_button_click
-	objid = ""+stat
+	__objid = ""+stat
 	
-	tmpobjs = get_objs(_mod@window)
-	tmpevents = get_events(_mod@window)
+	__tmpobjs = get_objs(_mod@window)
+	__tmpevents = get_events(_mod@window)
 	
-	if (unor_tryget(tmpobjs, objid, name) == 0) {
+	if (unor_tryget(__tmpobjs, __objid, __name) == 0) {
 		return
 	}
 	
-	if (unor_tryget(tmpevents, name, tmpevent) == 0) {
+	if (unor_tryget(__tmpevents, __name, __tmpevent) == 0) {
 		return
 	}
 	
-	if (unor_tryget(tmpevent, "onclick", event) == 0) {
+	if (unor_tryget(__tmpevent, "onclick", __event) == 0) {
 		return
 	}
 	
-	gosub event
+	gosub __event
 	
 return
 

@@ -5,24 +5,24 @@
 	resizable>
 	<button
 		top=0 left=0 right=0
-		width="full" height=20
-		name="btn1">DOCK TOP</button>
+		height=20
+		name="btn-top">DOCK TOP</button>
 	<button
-		top-related-to="btn1" bottom-related-to="btn2" right-related-to="pict"
+		bottom-of="btn-top" top-of="btn-bottom" right-of="pict"
 		top=0 bottom=0 left=0 right=0
-		width="20%"
-		name="btn3">DOCK LEFT</button>
+		width=50
+		name="btn-left">DOCK LEFT</button>
 	<picture
-		top-related-to="btn1" bottom-related-to="btn2"
+		bottom-of="btn-top" top-of="btn-bottom" right-of="btn-left" left-of="btn-right"
 		top=0 bottom=0 left=0 right=0
 		name="pict">samples/images/sample.png</picture>
 	<button
-		top-related-to="btn1" bottom-related-to="btn2" left-related-to="pict"
+		bottom-of="btn-top" top-of="btn-bottom" right-of="pict"
 		top=0 bottom=0 left=0 right=0
-		width="20%"
-		name="btn3">DOCK RIGHT</button>
+		width=50
+		name="btn-right">DOCK RIGHT</button>
 	<button
 		bottom=0 left=0 right=0
-		width="full" height=20
-		name="btn2">DOCK BOTTOM</button>
+		height=20
+		name="btn-bottom">DOCK BOTTOM</button>
 </window>
